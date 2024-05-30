@@ -1,190 +1,182 @@
-name : 'Terraform Plan/Apply Pipeline'
+# name : 'Terraform Plan/Apply Pipeline'
 
-on:
-  workflow_dispatch:
+# on:
+#   workflow_dispatch:
 
-permissions: read-all  
+# permissions: read-all
 
-env:
-  REGION: eu-west-1
-  BUCKET: aws-war-pipeline-tf-state
-  TFSTATE_FILE: aws-war-ec2/terraform1.tfstate
-  DB_TABLE: aws-war-pipeline
+# env:
+#   REGION: eu-west-1
+#   BUCKET: aws-war-pipeline-tf-state
+#   TFSTATE_FILE: aws-war-ec2/terraform1.tfstate
+#   DB_TABLE: aws-war-pipeline
 
-jobs:
-  terraform-plan:
-    name: TerraformPlan
-    runs-on:  ubuntu-latest
+# jobs:
+#   terraform-plan:
+#     name: TerraformPlan
+#     runs-on:  ubuntu-latest
 
-    defaults:
-      run:
-        shell: bash
+#     defaults:
+#       run:
+#         shell: bash
 
-    permissions:
-      contents: read
-      security-events: write 
-      actions: read
-    steps:
-      - uses: actions/checkout@v3
-      - uses: hashicorp/setup-terraform@v2
+#     permissions:
+#       contents: read
+#       security-events: write
+#       actions: read
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: hashicorp/setup-terraform@v2
 
-      # - name: Test with Checkov
-      #   id: checkov
-      #   uses: bridgecrewio/checkov-action@master
-      #   with:
-      #      directory: . 
-      #      framework: terraform 
-      #      download_external_modules: true
-      #      file: ./main.tf
-      #      skip_check: CKV_TF_1
-           
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id:      ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.REGION }}                          
+#       # - name: Test with Checkov
+#       #   id: checkov
+#       #   uses: bridgecrewio/checkov-action@master
+#       #   with:
+#       #      directory: .
+#       #      framework: terraform
+#       #      download_external_modules: true
+#       #      file: ./main.tf
+#       #      skip_check: CKV_TF_1
 
-      - name: Setup git global config
-        run: git config --global url."https://oauth2:${{secrets.CEQ_GHREPOSVCUSER_PAT_TOKEN}}@github.com".insteadOf https://github.com
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v1
-        with:
-          terraform_version: 1.8.2
-          terraform_wrapper: false
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v1
+#         with:
+#           aws-access-key-id:      ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ${{ env.REGION }}
 
+#       - name: Setup git global config
+#         run: git config --global url."https://oauth2:${{secrets.CEQ_GHREPOSVCUSER_PAT_TOKEN}}@github.com".insteadOf https://github.com
 
-      - name: Terraform Init
-        id: init
-        run:
-          terraform init -reconfigure
-         -backend-config="bucket=$BUCKET" 
-         -backend-config="key=$TFSTATE_FILE" 
-         -backend-config="dynamodb_table=$DB_TABLE"
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v1
+#         with:
+#           terraform_version: 1.8.2
+#           terraform_wrapper: false
 
-      # - name: Terraform unlock
-      #   run:
-      #      terraform force-unlock -force "f577eddc-cd83-0ed6-9815-8eb3a8bbeda4"
+#       - name: Terraform Init
+#         id: init
+#         run:
+#           terraform init -reconfigure
+#          -backend-config="bucket=$BUCKET"
+#          -backend-config="key=$TFSTATE_FILE"
+#          -backend-config="dynamodb_table=$DB_TABLE"
 
-      - name: Terraform Plan
-        run: terraform plan -out terraformplan.tfplan -input=false
+#       # - name: Terraform unlock
+#       #   run:
+#       #      terraform force-unlock -force "f577eddc-cd83-0ed6-9815-8eb3a8bbeda4"
 
-      - name: Terraform Plan convert JSON Format
-        run: terraform show -json terraformplan.tfplan > terraformplan.json
-  
-      - name: Show JSON File
-        run: cat terraformplan.json
-  
-      - name: Print path of plan.json
-        run: echo "Path of terraformplan.json is:$(pwd)/terraformplan.json"
-      
-      - name: Upload terraformplan.json to artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: terraform-plan
-          path: ${{ github.workspace }}/terraformplan.json
-    
-      - name: Download terraformplan.json from artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: terraform-plan
-          path: ${{ github.workspace }}/downloaded_terraformplan.json
+#       - name: Terraform Plan
+#         run: terraform plan -out terraformplan.tfplan -input=false
 
-      # - name: Install Infracost
-      #   run: |
-      #      curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
-      #      infracost --version
-     
-      # - name: Infra Auth
-      #   env:
-      #     INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
-      #   run: |
-      #      infracost configure set api_key $INFRACOST_API_KEY
-      # - name: Run Infracost   
-      #   run:  |
-      #      infracost breakdown --path .  
-         
-  terraform-apply: 
-      name: 'TerraformApply'
-      runs-on: ubuntu-latest
-      needs: ["terraform-plan"]
-  
-      # environment:
-      #   name: terraform_apply
-  
-      defaults:
-       run:
-        shell: bash
-  
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v2    
+#       - name: Terraform Plan convert JSON Format
+#         run: terraform show -json terraformplan.tfplan > terraformplan.json
 
-        - name: Configure AWS Credentials
-          uses: aws-actions/configure-aws-credentials@v1
-          with:
-            aws-access-key-id:      ${{ secrets.AWS_ACCESS_KEY_ID }}
-            aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            aws-region: ${{ env.REGION }}     
-            
-        - name: Setup git global config
-          run: git config --global url."https://oauth2:${{secrets.CEQ_GHREPOSVCUSER_PAT_TOKEN}}@github.com".insteadOf https://github.com
-        
-        - name: Setup Terraform
-          uses: hashicorp/setup-terraform@v1
-          with:
-            terraform_version: 1.8.2
-            terraform_wrapper: false
-          
-        - name: Terraform Init
-          id: init
-          run:
-            terraform init -reconfigure
-           -backend-config="bucket=$BUCKET" 
-           -backend-config="key=$TFSTATE_FILE" 
-           -backend-config="dynamodb_table=$DB_TABLE"
-  
-        - name: Terraform Apply
-          run: terraform apply -input=false -auto-approve
+#       - name: Show JSON File
+#         run: cat terraformplan.json
 
-        - name: Terraform Output 
-          run: vm=$(terraform output) && echo $vm > terraform-output1.ps1  &&  cat terraform-output1.ps1
+#       - name: Print path of plan.json
+#         run: echo "Path of terraformplan.json is:$(pwd)/terraformplan.json"
 
+#       - name: Upload terraformplan.json to artifacts
+#         uses: actions/upload-artifact@v2
+#         with:
+#           name: terraform-plan
+#           path: ${{ github.workspace }}/terraformplan.json
 
-        - name: Upload win.ps1 file
-          uses: actions/upload-artifact@v3
-          with:
-            name: terraform-output1.ps1
-            path: terraform-output1.ps1
+#       - name: Download terraformplan.json from artifacts
+#         uses: actions/download-artifact@v2
+#         with:
+#           name: terraform-plan
+#           path: ${{ github.workspace }}/downloaded_terraformplan.json
 
+#       # - name: Install Infracost
+#       #   run: |
+#       #      curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+#       #      infracost --version
 
-        - name: Download terraform-output1.ps1 file
-          uses: actions/download-artifact@v2
-          with:
-            name: terraform-output1.ps1
+#       # - name: Infra Auth
+#       #   env:
+#       #     INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+#       #   run: |
+#       #      infracost configure set api_key $INFRACOST_API_KEY
+#       # - name: Run Infracost
+#       #   run:  |
+#       #      infracost breakdown --path .
 
-        - name: Parse terraform output
-          id: read_output
-          run: |
-            OUTPUT=$(cat terraform-output1.ps1)
-            REGION=$(echo "$OUTPUT" | grep -oP '(?<=region = ").*?(?=")')
-            NETWORK_ACL_ID=$(echo "$OUTPUT" | grep -oP '(?<=default_network_acl_id = ").*?(?=")')
-            echo "::set-output name=region::$REGION"
-            echo "::set-output name=network_acl_id::$NETWORK_ACL_ID"
+#   terraform-apply:
+#       name: 'TerraformApply'
+#       runs-on: ubuntu-latest
+#       needs: ["terraform-plan"]
 
-        - name: replace-network-acl-entry
-          run: |
-            aws ec2 replace-network-acl-entry --region ${{ steps.read_output.outputs.region }} --network-acl-id ${{ steps.read_output.outputs.network_acl_id }} --ingress --rule-number 100 --protocol tcp --port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow
+#       # environment:
+#       #   name: terraform_apply
 
-            
-  
+#       defaults:
+#        run:
+#         shell: bash
 
-        # - name: replace-network-acl-entry
-        #   run: aws ec2 replace-network-acl-entry --region us-east-1 --network-acl-id acl-abcd1234 --ingress --rule-number 100 --protocol tcp--port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow
+#       steps:
+#         - name: Checkout
+#           uses: actions/checkout@v2
 
-        # - name: autoiscaling group
-        #   run: aws autoscaling attach-instances --auto-scaling-group-name my-asg  --instance-ids i-12345678 i-87654321
+#         - name: Configure AWS Credentials
+#           uses: aws-actions/configure-aws-credentials@v1
+#           with:
+#             aws-access-key-id:      ${{ secrets.AWS_ACCESS_KEY_ID }}
+#             aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#             aws-region: ${{ env.REGION }}
 
+#         - name: Setup git global config
+#           run: git config --global url."https://oauth2:${{secrets.CEQ_GHREPOSVCUSER_PAT_TOKEN}}@github.com".insteadOf https://github.com
 
-       
+#         - name: Setup Terraform
+#           uses: hashicorp/setup-terraform@v1
+#           with:
+#             terraform_version: 1.8.2
+#             terraform_wrapper: false
+
+#         - name: Terraform Init
+#           id: init
+#           run:
+#             terraform init -reconfigure
+#            -backend-config="bucket=$BUCKET"
+#            -backend-config="key=$TFSTATE_FILE"
+#            -backend-config="dynamodb_table=$DB_TABLE"
+
+#         - name: Terraform Apply
+#           run: terraform apply -input=false -auto-approve
+
+#         - name: Terraform Output
+#           run: vm=$(terraform output) && echo $vm > terraform-output1.ps1  &&  cat terraform-output1.ps1
+
+#         - name: Upload win.ps1 file
+#           uses: actions/upload-artifact@v3
+#           with:
+#             name: terraform-output1.ps1
+#             path: terraform-output1.ps1
+
+#         - name: Download terraform-output1.ps1 file
+#           uses: actions/download-artifact@v2
+#           with:
+#             name: terraform-output1.ps1
+
+#         - name: Parse terraform output
+#           id: read_output
+#           run: |
+#             OUTPUT=$(cat terraform-output1.ps1)
+#             REGION=$(echo "$OUTPUT" | grep -oP '(?<=region = ").*?(?=")')
+#             NETWORK_ACL_ID=$(echo "$OUTPUT" | grep -oP '(?<=default_network_acl_id = ").*?(?=")')
+#             echo "::set-output name=region::$REGION"
+#             echo "::set-output name=network_acl_id::$NETWORK_ACL_ID"
+
+#         - name: replace-network-acl-entry
+#           run: |
+#             aws ec2 replace-network-acl-entry --region ${{ steps.read_output.outputs.region }} --network-acl-id ${{ steps.read_output.outputs.network_acl_id }} --ingress --rule-number 100 --protocol tcp --port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow
+
+#         # - name: replace-network-acl-entry
+#         #   run: aws ec2 replace-network-acl-entry --region us-east-1 --network-acl-id acl-abcd1234 --ingress --rule-number 100 --protocol tcp--port-range From=443,To=443 --cidr-block 0.0.0.0/0 --rule-action allow
+
+#         # - name: autoiscaling group
+#         #   run: aws autoscaling attach-instances --auto-scaling-group-name my-asg  --instance-ids i-12345678 i-87654321
+

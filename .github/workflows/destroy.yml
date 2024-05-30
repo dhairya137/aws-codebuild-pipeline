@@ -1,0 +1,50 @@
+name : 'Terraform destroy'
+
+on:
+  workflow_dispatch:
+  
+env:
+  REGION: eu-west-1
+  BUCKET: aws-war-pipeline-tf-state
+  TFSTATE_FILE: aws-war-ec2/terraform.tfstate
+  DB_TABLE: aws-war-pipeline
+
+jobs:
+  terraform-destory:
+    name: TerraformDestroy
+    runs-on:  ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id:      ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # aws-session-token:      ${{ secrets.AWS_SESSION_TOKEN }} 
+          aws-region: ${{ env.REGION }}                         
+
+      - name: Setup git global config
+        run: git config --global url."https://oauth2:${{secrets.CEQ_GHREPOSVCUSER_PAT_TOKEN}}@github.com".insteadOf https://github.com
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.8.2
+          terraform_wrapper: false
+          
+      - name: Terraform Init
+        id: init
+        run:
+          terraform init -reconfigure
+         -backend-config="bucket=$BUCKET" 
+         -backend-config="key=$TFSTATE_FILE" 
+         -backend-config="dynamodb_table=$DB_TABLE"
+
+      - name: Terraform destroy
+        id: destroy
+        run:  terraform destroy -auto-approve  
